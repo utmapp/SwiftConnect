@@ -1,22 +1,22 @@
 import XCTest
 
-@testable import AppleConnect
+@testable import SwiftConnect
 
-final class AppleConnectTests: XCTestCase {
-	static let serviceType = "_appleconnecttest._tcp"
+final class SwiftConnectTests: XCTestCase {
+	static let serviceType = "_swiftconnecttest._tcp"
 
 	// Generated randomly.
 	static let key = Data([0xbb, 0x62, 0x04, 0x37, 0x86, 0x6e, 0x03, 0x45])
 
 	static let clientData = [
 		Data([1]),
-		AppleConnectTests.key,
+		SwiftConnectTests.key,
 		Data([UInt8](repeating: 0xfe, count: 100_000)),
 	]
 
 	static let serverData = [
 		Data([2]),
-		AppleConnectTests.key,
+		SwiftConnectTests.key,
 		Data([UInt8](repeating: 0xfd, count: 100_000)),
 	]
 

@@ -1,7 +1,7 @@
 import Foundation
 import Network
 
-class AppleConnectProtocol: NWProtocolFramerImplementation {
+class SwiftConnectProtocol: NWProtocolFramerImplementation {
 	struct Header {
 		static let headerSize = MemoryLayout<UInt64>.size
 		let length: UInt64
@@ -14,9 +14,9 @@ class AppleConnectProtocol: NWProtocolFramerImplementation {
 		}
 	}
 
-	static let definition = NWProtocolFramer.Definition(implementation: AppleConnectProtocol.self)
+	static let definition = NWProtocolFramer.Definition(implementation: SwiftConnectProtocol.self)
 
-	static var label: String = "AppleConnect"
+	static var label: String = "SwiftConnect"
 
 	required init(framer: NWProtocolFramer.Instance) {
 	}
@@ -61,7 +61,7 @@ class AppleConnectProtocol: NWProtocolFramerImplementation {
 	}
 }
 
-extension AppleConnectProtocol.Header {
+extension SwiftConnectProtocol.Header {
 	init(buffer: UnsafeMutableRawBufferPointer) {
 		length = buffer[buffer.startIndex..<buffer.startIndex.advanced(by: MemoryLayout<UInt64>.size)].reduce(0) {
 			return UInt64($0 << 8) | UInt64($1)

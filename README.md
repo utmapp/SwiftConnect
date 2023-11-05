@@ -1,13 +1,13 @@
-# AppleConnect
+# SwiftConnect
 
-AppleConnect is a small Swift wrapper around a Network TCP stream on the local network (using Bonjour for discovery). While the transport is bidirectional, the API is designed around a "service" provided by a single server and connected to by potentially many clients.
+SwiftConnect is a small Swift wrapper around a Network TCP stream on the local network (using Bonjour for discovery). While the transport is bidirectional, the API is designed around a "service" provided by a single server and connected to by potentially many clients.
 
 ## Usage
 
 Setup for servers differs a little bit from clients. Once a connection is established, the channel is identical from both ends. All connections are encrypted using TLS-PSK derived from a shared key of your choosing.
 
 > [!IMPORTANT]  
-> For security, you should generate the shared key using cryptographically appropriate random data. Sharing this key should be done out-of-band and is out of scope for AppleConnect. For user-facing applications, one way you might do this is by generating a code on one device and asking the user to confirm it on the second one.
+> For security, you should generate the shared key using cryptographically appropriate random data. Sharing this key should be done out-of-band and is out of scope for SwiftConnect. For user-facing applications, one way you might do this is by generating a code on one device and asking the user to confirm it on the second one.
 
 ### Setting up the server
 

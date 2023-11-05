@@ -144,7 +144,7 @@ extension NWParameters {
 	convenience init(authenticatingWithKey key: Data) {
 		let tlsOptions = NWProtocolTLS.Options()
 		let symmetricKey = SymmetricKey(data: key)
-		let code = HMAC<SHA256>.authenticationCode(for: Data("AppleConnect".utf8), using: symmetricKey).withUnsafeBytes(DispatchData.init)
+		let code = HMAC<SHA256>.authenticationCode(for: Data("SwiftConnect".utf8), using: symmetricKey).withUnsafeBytes(DispatchData.init)
 		sec_protocol_options_add_pre_shared_key(tlsOptions.securityProtocolOptions, code as dispatch_data_t, Data("WindowProjectionTest".utf8).withUnsafeBytes(DispatchData.init) as dispatch_data_t)
 		sec_protocol_options_append_tls_ciphersuite(tlsOptions.securityProtocolOptions, tls_ciphersuite_t(rawValue: numericCast(TLS_PSK_WITH_AES_128_GCM_SHA256))!)
 
@@ -154,7 +154,7 @@ extension NWParameters {
 		sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
 
 		self.init(tls: tlsOptions)
-		defaultProtocolStack.applicationProtocols.insert(NWProtocolFramer.Options(definition: .init(implementation: AppleConnectProtocol.self)), at: 0)
+		defaultProtocolStack.applicationProtocols.insert(NWProtocolFramer.Options(definition: .init(implementation: SwiftConnectProtocol.self)), at: 0)
 		includePeerToPeer = true
 	}
 }

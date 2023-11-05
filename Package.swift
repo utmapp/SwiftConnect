@@ -3,18 +3,18 @@
 import PackageDescription
 
 let package = Package(
-	name: "AppleConnect",
+	name: "SwiftConnect",
 	platforms: [.macOS(.v10_15), .iOS(.v13), .watchOS(.v7), .tvOS(.v13)],
 	products: [
 		.library(
-			name: "AppleConnect",
-			targets: ["AppleConnect"])
+			name: "SwiftConnect",
+			targets: ["SwiftConnect"])
 	],
 	targets: [
 		.target(
-			name: "AppleConnect"),
+			name: "SwiftConnect"),
 		.testTarget(
-			name: "AppleConnectTests",
-			dependencies: ["AppleConnect"]),
+			name: "SwiftConnectTests",
+			dependencies: ["SwiftConnect"]),
 	]
 )
