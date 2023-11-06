@@ -1,0 +1,14 @@
+{
+  "pins" : [
+    {
+      "identity" : "cod",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/saagarjha/Cod.git",
+      "state" : {
+        "branch" : "main",
+        "revision" : "9ab61a00a5d9e4d21ed15af36734ea435cb4cf8c"
+      }
+    }
+  ],
+  "version" : 2
+}

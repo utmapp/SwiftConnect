@@ -10,9 +10,13 @@ let package = Package(
 			name: "SwiftConnect",
 			targets: ["SwiftConnect"])
 	],
+	dependencies: [
+		.package(url: "https://github.com/saagarjha/Cod.git", branch: "main")
+	],
 	targets: [
 		.target(
-			name: "SwiftConnect"),
+			name: "SwiftConnect",
+			dependencies: ["Cod"]),
 		.testTarget(
 			name: "SwiftConnectTests",
 			dependencies: ["SwiftConnect"]),
