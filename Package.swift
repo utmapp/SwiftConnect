@@ -4,7 +4,7 @@ import PackageDescription
 
 let package = Package(
 	name: "SwiftConnect",
-	platforms: [.macOS(.v10_15), .iOS(.v13), .watchOS(.v7), .tvOS(.v13)],
+	platforms: [.macOS(.v10_15), .iOS(.v13), .watchOS(.v7), .tvOS(.v13), .visionOS(.v1)],
 	products: [
 		.library(
 			name: "SwiftConnect",
