@@ -8,6 +8,7 @@
 import Cod
 import Foundation
 
+/// Alternative to `Codable` that will not collide with internal Apple types.
 public protocol Serializable {
 	typealias Encoder = CodEncoder
 	typealias Decoder = CodDecoder

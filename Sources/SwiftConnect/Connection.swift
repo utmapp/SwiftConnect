@@ -2,14 +2,24 @@ import CryptoKit
 import Foundation
 import Network
 
+/// Establishing and managing end-to-end connections.
 public struct Connection {
+	/// Callback function for custom certificate chain validation.
 	public typealias ValidationCallback = ([SecCertificate]) -> Bool
 
+	/// Underlying Network.framework connection.
 	public let connection: NWConnection
-	public let listening: Bool
+
+	/// If true, this connection is in server mode.
+	public let isListening: Bool
+
+	/// Iterate over this property to read data from the connection.
 	public let data: AsyncThrowingStream<Data, Error>
+
+	/// Internal continuation context for `data`.
 	private let dataContinuation: AsyncThrowingStream<Data, Error>.Continuation
 
+	/// Certificate chain of the connected peer.
 	public var peerCertificateChain: [SecCertificate] {
 		guard let metadata = connection.metadata(definition: NWProtocolTLS.definition) as? NWProtocolTLS.Metadata else {
 			return []
@@ -17,6 +27,9 @@ public struct Connection {
 		return metadata.securityProtocolMetadata.peerCertificateChain
 	}
 
+	/// Finds local peers advertising a service over Bonjour.
+	/// - Parameter serviceType: Name of the service to look for.
+	/// - Returns: List of endpoints (asynchronously).
 	public static func endpoints(forServiceType serviceType: String) -> AsyncThrowingStream<[NWEndpoint], Error> {
 		AsyncThrowingStream { continuation in
 			let parameters = NWParameters()
@@ -44,13 +57,26 @@ public struct Connection {
 			browser.start(queue: .main)
 		}
 	}
-
+	
+	/// Start a new service over Bonjour using TLS with a shared key.
+	/// - Parameters:
+	///   - serviceType: Name of the service to advertise.
+	///   - name: Optional name of the device.
+	///   - key: Pre-shared key to establish TLS-PSK.
+	/// - Returns: List of connected peers (asynchronously).
 	public static func advertise(forServiceType serviceType: String, name: String? = nil, key: Data) -> AsyncThrowingStream<NWConnection, Error> {
 		advertise(forServiceType: serviceType, name: name) {
 			NWParameters(authenticatingWithKey: key)
 		}
 	}
 
+	/// Start a new service over Bonjour using TLS with a server identity.
+	/// - Parameters:
+	///   - serviceType: Name of the service to advertise.
+	///   - name: Optional name of the device.
+	///   - identity: Contains the certificate and private key of the server.
+	///   - validation: Optional validation callback on connecting clients.
+	/// - Returns: List of connected peers (asynchronously).
 	public static func advertise(forServiceType serviceType: String, name: String? = nil, identity: SecIdentity, validation: @escaping ValidationCallback = { _ in true }) -> AsyncThrowingStream<NWConnection, Error> {
 		advertise(forServiceType: serviceType, name: name) {
 			NWParameters(authenticatingWithIdentity: identity, isServer: true, validation: validation)
@@ -87,12 +113,21 @@ public struct Connection {
 		}
 	}
 
+	/// Open a new connection to an existing service using TLS with a shared key.
+	/// - Parameters:
+	///   - endpoint: Service to connect to.
+	///   - key: Pre-shared key to establish TLS-PSK.
 	public init(endpoint: NWEndpoint, key: Data) async throws {
 		try await self.init(endpoint: endpoint) {
 			NWParameters(authenticatingWithKey: key)
 		}
 	}
 
+	/// Open a new connection to an existing service using TLS with a client identity.
+	/// - Parameters:
+	///   - endpoint: Service to connect to.
+	///   - identity: Contains the certificate and private key of the client.
+	///   - validation: Optional validation callback on the server identity.
 	public init(endpoint: NWEndpoint, identity: SecIdentity, validation: @escaping ValidationCallback = { _ in true }) async throws {
 		try await self.init(endpoint: endpoint) {
 			NWParameters(authenticatingWithIdentity: identity, isServer: false, validation: validation)
@@ -101,19 +136,21 @@ public struct Connection {
 
 	private init(endpoint: NWEndpoint, parameters: () -> NWParameters) async throws {
 		self.connection = NWConnection(to: endpoint, using: parameters())
-		listening = false
+		isListening = false
 		(data, dataContinuation) = AsyncThrowingStream.makeStream()
 		try await connect()
 	}
 
+	/// Accept a new connecting client.
+	/// - Parameter connection: Connection from a client.
 	public init(connection: NWConnection) async throws {
 		self.connection = connection
-		listening = true
+		isListening = true
 		(data, dataContinuation) = AsyncThrowingStream.makeStream()
 		try await connect()
 	}
 
-	public func connect() async throws {
+	private func connect() async throws {
 		try await withCheckedThrowingContinuation { continuation in
 			connection.stateUpdateHandler = { [weak connection] state in
 				switch state {
@@ -141,6 +178,8 @@ public struct Connection {
 		Self.recieveNextMessage(connection: connection, continuation: dataContinuation)
 	}
 
+	/// Send data to connected peer.
+	/// - Parameter data: Data to send.
 	public func send(data: Data) async throws {
 		return try await withCheckedThrowingContinuation { continuation in
 			connection.send(
@@ -155,6 +194,7 @@ public struct Connection {
 		}
 	}
 
+	/// Close and invalidate this connection.
 	public func close() {
 		connection.cancel()
 	}

@@ -7,6 +7,7 @@
 
 import Foundation
 
+/// Represents a remote peer who can send and receive messages.
 public struct Peer<ID: MessageID> {
 	private let connection: Connection
 	private let localInterface: any LocalInterface<ID>
@@ -46,7 +47,11 @@ public struct Peer<ID: MessageID> {
 	}
 	private let replies = Replies()
 
-	init(connection: Connection, localInterface: any LocalInterface<ID>) {
+	/// Create a peer from a connection.
+	/// - Parameters:
+	///   - connection: An established connection.
+	///   - localInterface: A local interface used for handling remote messages.
+	public init(connection: Connection, localInterface: any LocalInterface<ID>) {
 		self.connection = connection
 		self.localInterface = localInterface
 		serviceReplies()
@@ -130,15 +135,20 @@ private struct PeerFlag: OptionSet {
 	static let error = PeerFlag(rawValue: 1 << 1)
 }
 
-enum PeerError: Error {
+/// Error responses from the communications.
+public enum PeerError: Error {
+	/// An invalid message was recieved from the peer.
 	case invalidMessage
+	/// An invalid token was recieved from the peer.
 	case invalidToken
+	/// An unsupported `MessageID` was recieved from the peer. (Usually indicating an interface version mismatch).
 	case unsupportedMessage(UInt8)
+	/// An error message was sent by the peer.
 	case errorMessage(String)
 }
 
 extension PeerError: LocalizedError {
-	var errorDescription: String? {
+	public var errorDescription: String? {
 		switch self {
 		case .invalidMessage: return NSLocalizedString("An invalid message was recieved from the peer.", comment: "Peer")
 		case .invalidToken: return NSLocalizedString("An invalid token was recieved from the peer.", comment: "Peer")
@@ -148,10 +158,22 @@ extension PeerError: LocalizedError {
 	}
 }
 
+/// Implement this protocol to handle messages from the remote peer.
 public protocol LocalInterface<ID> {
 	associatedtype ID: MessageID
 
+	/// Handle a message from a peer.
+	/// - Parameters:
+	///   - message: Unique identifier for this message.
+	///   - data: Incoming parameters which must be unserialized in an agreed-upon procedure.
+	/// - Returns: Outgoing response which must be serialized in an agreed-upon procedure.
 	func handle(message: ID, data: Data) async throws -> Data
+
+	/// (Optional) Handle an error from a peer.
+	///
+	/// If the error is in response to a message, it will be thrown in the `send(_:to:)` call.
+	/// Any other communication error will be handled by this function.
+	/// - Parameter error: Error received.
 	func handle(error: Error)
 }
 

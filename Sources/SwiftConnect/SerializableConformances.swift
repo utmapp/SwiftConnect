@@ -7,6 +7,7 @@
 
 import Foundation
 
+/// Represents a `Void` type.
 public struct SerializableVoid: Serializable {
 	public func encode() -> Data {
 		Data()
