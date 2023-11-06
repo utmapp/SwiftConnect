@@ -3,10 +3,19 @@ import Foundation
 import Network
 
 public struct Connection {
+	public typealias ValidationCallback = ([SecCertificate]) -> Bool
+
 	public let connection: NWConnection
 	public let listening: Bool
 	public let data: AsyncThrowingStream<Data, Error>
 	private let dataContinuation: AsyncThrowingStream<Data, Error>.Continuation
+
+	public var peerCertificateChain: [SecCertificate] {
+		guard let metadata = connection.metadata(definition: NWProtocolTLS.definition) as? NWProtocolTLS.Metadata else {
+			return []
+		}
+		return metadata.securityProtocolMetadata.peerCertificateChain
+	}
 
 	public static func endpoints(forServiceType serviceType: String) -> AsyncThrowingStream<[NWEndpoint], Error> {
 		AsyncThrowingStream { continuation in
@@ -37,10 +46,22 @@ public struct Connection {
 	}
 
 	public static func advertise(forServiceType serviceType: String, name: String? = nil, key: Data) -> AsyncThrowingStream<NWConnection, Error> {
+		advertise(forServiceType: serviceType, name: name) {
+			NWParameters(authenticatingWithKey: key)
+		}
+	}
+
+	public static func advertise(forServiceType serviceType: String, name: String? = nil, identity: SecIdentity, validation: @escaping ValidationCallback = { _ in true }) -> AsyncThrowingStream<NWConnection, Error> {
+		advertise(forServiceType: serviceType, name: name) {
+			NWParameters(authenticatingWithIdentity: identity, isServer: true, validation: validation)
+		}
+	}
+
+	private static func advertise(forServiceType serviceType: String, name: String?, parameters: () -> NWParameters) -> AsyncThrowingStream<NWConnection, Error> {
 		AsyncThrowingStream { continuation in
 			let listener: NWListener
 			do {
-				listener = try NWListener(using: NWParameters(authenticatingWithKey: key))
+				listener = try NWListener(using: parameters())
 			} catch {
 				continuation.finish(throwing: error)
 				return
@@ -67,7 +88,19 @@ public struct Connection {
 	}
 
 	public init(endpoint: NWEndpoint, key: Data) async throws {
-		self.connection = NWConnection(to: endpoint, using: NWParameters(authenticatingWithKey: key))
+		try await self.init(endpoint: endpoint) {
+			NWParameters(authenticatingWithKey: key)
+		}
+	}
+
+	public init(endpoint: NWEndpoint, identity: SecIdentity, validation: @escaping ValidationCallback = { _ in true }) async throws {
+		try await self.init(endpoint: endpoint) {
+			NWParameters(authenticatingWithIdentity: identity, isServer: false, validation: validation)
+		}
+	}
+
+	private init(endpoint: NWEndpoint, parameters: () -> NWParameters) async throws {
+		self.connection = NWConnection(to: endpoint, using: parameters())
 		listening = false
 		(data, dataContinuation) = AsyncThrowingStream.makeStream()
 		try await connect()
@@ -156,5 +189,35 @@ extension NWParameters {
 		self.init(tls: tlsOptions)
 		defaultProtocolStack.applicationProtocols.insert(NWProtocolFramer.Options(definition: .init(implementation: SwiftConnectProtocol.self)), at: 0)
 		includePeerToPeer = true
+	}
+
+	convenience init(authenticatingWithIdentity identity: SecIdentity, isServer: Bool, validation: @escaping Connection.ValidationCallback) {
+		let tlsOptions = NWProtocolTLS.Options()
+		sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
+		if isServer {
+			sec_protocol_options_set_peer_authentication_required(tlsOptions.securityProtocolOptions, true)
+			sec_protocol_options_set_challenge_block(tlsOptions.securityProtocolOptions, { _, completion in
+				completion(sec_identity_create(identity)!)
+			}, .main)
+		} else {
+			sec_protocol_options_set_local_identity(tlsOptions.securityProtocolOptions, sec_identity_create(identity)!)
+		}
+		sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { metadata, _, completion in
+			completion(validation(metadata.peerCertificateChain))
+		}, .main)
+
+		self.init(tls: tlsOptions)
+		defaultProtocolStack.applicationProtocols.insert(NWProtocolFramer.Options(definition: .init(implementation: SwiftConnectProtocol.self)), at: 0)
+		includePeerToPeer = true
+	}
+}
+
+extension sec_protocol_metadata_t {
+	var peerCertificateChain: [SecCertificate] {
+		var certificates = [SecCertificate]()
+		sec_protocol_metadata_access_peer_certificate_chain(self) { certificate in
+			certificates.append(sec_certificate_copy_ref(certificate).takeRetainedValue())
+		}
+		return certificates
 	}
 }
