@@ -8,10 +8,10 @@
 import Foundation
 
 public struct Peer<ID: MessageID> {
-	let connection: Connection
-	let localInterface: any LocalInterface<ID>
+	private let connection: Connection
+	private let localInterface: any LocalInterface<ID>
 
-	actor Replies {
+	private actor Replies {
 		var token: Int = 1
 		var continuations = [Int: CheckedContinuation<Data, Error>]()
 
@@ -44,7 +44,7 @@ public struct Peer<ID: MessageID> {
 			continuation.resume(throwing: error)
 		}
 	}
-	let replies = Replies()
+	private let replies = Replies()
 
 	init(connection: Connection, localInterface: any LocalInterface<ID>) {
 		self.connection = connection
@@ -52,7 +52,7 @@ public struct Peer<ID: MessageID> {
 		serviceReplies()
 	}
 
-	func serviceReplies() {
+	private func serviceReplies() {
 		Task {
 			do {
 				for try await data in connection.data {
@@ -100,11 +100,7 @@ public struct Peer<ID: MessageID> {
 		}
 	}
 
-	func send(message: ID, data: Data) async throws {
-		try await send(message: message, data: data, token: 0)
-	}
-
-	func sendWithReply(message: ID, data: Data) async throws -> Data {
+	internal func sendWithReply(message: ID, data: Data) async throws -> Data {
 		try await withCheckedThrowingContinuation { continuation in
 			Task {
 				let token = await replies.enqueue(continuation)
@@ -117,16 +113,16 @@ public struct Peer<ID: MessageID> {
 		}
 	}
 
-	func send(message: ID, data: Data, token: Int, flags: PeerFlag = .none) async throws {
+	private func send(message: ID, data: Data, token: Int, flags: PeerFlag = .none) async throws {
 		try await connection.send(data: Data([message.rawValue, flags.rawValue]) + token.uleb128 + data)
 	}
 
-	func send(message: ID, error: Error, token: Int) async throws {
+	private func send(message: ID, error: Error, token: Int) async throws {
 		try await send(message: message, data: error.localizedDescription.data(using: .utf8)!, token: token, flags: [.response, .error])
 	}
 }
 
-struct PeerFlag: OptionSet {
+private struct PeerFlag: OptionSet {
 	let rawValue: UInt8
 
 	static let none = PeerFlag([])
