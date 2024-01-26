@@ -116,10 +116,16 @@ public struct Peer<LocalID: MessageID> {
 		try await withCheckedThrowingContinuation { continuation in
 			Task {
 				let token = await replies.enqueue(continuation)
-				do {
-					try await send(message: message, data: data, token: token)
-				} catch {
-					try! await replies.fail(error, forToken: token)
+				await withTaskCancellationHandler {
+					do {
+						try await send(message: message, data: data, token: token)
+					} catch {
+						try? await replies.fail(error, forToken: token)
+					}
+				} onCancel: {
+					Task {
+						try? await replies.fail(CancellationError(), forToken: token)
+					}
 				}
 			}
 		}
