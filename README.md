@@ -196,7 +196,7 @@ struct Remote {
 
 	init(connection: Connection) {
 		let local = Local()
-		self.connection = Peer(connection: connection, localInterface: local)
+		self.peer = Peer(connection: connection, localInterface: local)
 		local.remote = self
 	}
 

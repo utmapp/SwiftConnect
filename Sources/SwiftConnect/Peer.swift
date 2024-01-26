@@ -8,9 +8,9 @@
 import Foundation
 
 /// Represents a remote peer who can send and receive messages.
-public struct Peer<ID: MessageID> {
+public struct Peer<LocalID: MessageID> {
 	private let connection: Connection
-	private let localInterface: any LocalInterface<ID>
+	private let localInterface: any LocalInterface<LocalID>
 
 	private actor Replies {
 		var token: Int = 1
@@ -51,7 +51,7 @@ public struct Peer<ID: MessageID> {
 	/// - Parameters:
 	///   - connection: An established connection.
 	///   - localInterface: A local interface used for handling remote messages.
-	public init(connection: Connection, localInterface: any LocalInterface<ID>) {
+	public init(connection: Connection, localInterface: any LocalInterface<LocalID>) {
 		self.connection = connection
 		self.localInterface = localInterface
 		serviceReplies()
@@ -67,9 +67,6 @@ public struct Peer<ID: MessageID> {
 							guard let id = data.popFirst(), let _flags = data.popFirst() else {
 								throw PeerError.invalidMessage
 							}
-							guard let message = ID(rawValue: id) else {
-								throw PeerError.unsupportedMessage(id)
-							}
 
 							let flags = PeerFlag(rawValue: _flags)
 							let token = try Int(uleb128: &data)
@@ -84,6 +81,9 @@ public struct Peer<ID: MessageID> {
 								}
 							} else {
 								// handle requests
+								guard let message = LocalID(rawValue: id) else {
+									throw PeerError.unsupportedMessage(id)
+								}
 								var response: Data?
 								do {
 									response = try await localInterface.handle(message: message, data: data)
@@ -105,7 +105,7 @@ public struct Peer<ID: MessageID> {
 		}
 	}
 
-	internal func sendWithReply(message: ID, data: Data) async throws -> Data {
+	internal func sendWithReply(message: any MessageID, data: Data) async throws -> Data {
 		try await withCheckedThrowingContinuation { continuation in
 			Task {
 				let token = await replies.enqueue(continuation)
@@ -118,11 +118,11 @@ public struct Peer<ID: MessageID> {
 		}
 	}
 
-	private func send(message: ID, data: Data, token: Int, flags: PeerFlag = .none) async throws {
+	private func send(message: any MessageID, data: Data, token: Int, flags: PeerFlag = .none) async throws {
 		try await connection.send(data: Data([message.rawValue, flags.rawValue]) + token.uleb128 + data)
 	}
 
-	private func send(message: ID, error: Error, token: Int) async throws {
+	private func send(message: any MessageID, error: Error, token: Int) async throws {
 		try await send(message: message, data: error.localizedDescription.data(using: .utf8)!, token: token, flags: [.response, .error])
 	}
 }

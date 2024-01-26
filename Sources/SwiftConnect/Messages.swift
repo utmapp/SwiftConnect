@@ -23,7 +23,7 @@ public extension Message {
 	///   - parameters: Parameters to send to the peer.
 	///   - peer: Peer who will receive the message.
 	/// - Returns: Response from the peer.
-	static func send(_ parameters: Request, to peer: Peer<ID>) async throws -> Reply {
+	static func send(_ parameters: Request, to peer: Peer<some MessageID>) async throws -> Reply {
 		try await .decode(peer.sendWithReply(message: Self.id, data: parameters.encode()))
 	}
 }
