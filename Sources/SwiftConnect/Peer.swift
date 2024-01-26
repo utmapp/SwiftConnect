@@ -57,6 +57,13 @@ public struct Peer<LocalID: MessageID> {
 		serviceReplies()
 	}
 
+	/// Closes the connection with the peer.
+	///
+	/// Once called, this object should be discarded.
+	public func close() {
+		connection.close()
+	}
+
 	private func serviceReplies() {
 		Task {
 			do {
