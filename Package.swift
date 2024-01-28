@@ -11,7 +11,7 @@ let package = Package(
 			targets: ["SwiftConnect"])
 	],
 	dependencies: [
-		.package(url: "https://github.com/saagarjha/Cod.git", branch: "main")
+		.package(url: "https://github.com/osy/Cod.git", branch: "main")
 	],
 	targets: [
 		.target(
