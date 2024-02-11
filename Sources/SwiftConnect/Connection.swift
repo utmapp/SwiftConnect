@@ -27,19 +27,19 @@ public struct Connection {
 		return metadata.securityProtocolMetadata.peerCertificateChain
 	}
 
-	/// Finds local peers advertising a service over Bonjour.
+	/// Finds local peers advertising a service over Bonjour with optional metadata.
 	/// - Parameter serviceType: Name of the service to look for.
-	/// - Returns: List of endpoints (asynchronously).
-	public static func endpoints(forServiceType serviceType: String) -> AsyncThrowingStream<[NWEndpoint], Error> {
+	/// - Returns: Set of browse results (asynchronously).
+	public static func browse(forServiceType serviceType: String) -> AsyncThrowingStream<Set<NWBrowser.Result>, Error> {
 		AsyncThrowingStream { continuation in
 			let parameters = NWParameters()
 			parameters.includePeerToPeer = true
 
-			let browser = NWBrowser(for: .bonjour(type: serviceType, domain: nil), using: parameters)
+			let browser = NWBrowser(for: .bonjourWithTXTRecord(type: serviceType, domain: nil), using: parameters)
 			browser.stateUpdateHandler = { state in
 				switch state {
 					case .ready:
-						continuation.yield(browser.browseResults.map(\.endpoint))
+						continuation.yield(browser.browseResults)
 					case .failed(let error):
 						continuation.finish(throwing: error)
 					case .cancelled:
@@ -49,7 +49,7 @@ public struct Connection {
 				}
 			}
 			browser.browseResultsChangedHandler = { results, changes in
-				continuation.yield(results.map(\.endpoint))
+				continuation.yield(results)
 			}
 			continuation.onTermination = { @Sendable _ in
 				browser.cancel()
@@ -64,8 +64,8 @@ public struct Connection {
 	///   - name: Optional name of the device.
 	///   - key: Pre-shared key to establish TLS-PSK.
 	/// - Returns: List of connected peers (asynchronously).
-	public static func advertise(forServiceType serviceType: String, name: String? = nil, key: Data) -> AsyncThrowingStream<NWConnection, Error> {
-		advertise(forServiceType: serviceType, name: name) {
+	public static func advertise(forServiceType serviceType: String, name: String? = nil, txtRecord: NWTXTRecord? = nil, key: Data) -> AsyncThrowingStream<NWConnection, Error> {
+		advertise(forServiceType: serviceType, name: name, txtRecord: txtRecord) {
 			NWParameters(authenticatingWithKey: key)
 		}
 	}
@@ -77,13 +77,13 @@ public struct Connection {
 	///   - identity: Contains the certificate and private key of the server.
 	///   - validation: Optional validation callback on connecting clients.
 	/// - Returns: List of connected peers (asynchronously).
-	public static func advertise(forServiceType serviceType: String, name: String? = nil, identity: SecIdentity, validation: @escaping ValidationCallback = { _ in true }) -> AsyncThrowingStream<NWConnection, Error> {
-		advertise(forServiceType: serviceType, name: name) {
+	public static func advertise(forServiceType serviceType: String, name: String? = nil, txtRecord: NWTXTRecord? = nil, identity: SecIdentity, validation: @escaping ValidationCallback = { _ in true }) -> AsyncThrowingStream<NWConnection, Error> {
+		advertise(forServiceType: serviceType, name: name, txtRecord: txtRecord) {
 			NWParameters(authenticatingWithIdentity: identity, isServer: true, validation: validation)
 		}
 	}
 
-	private static func advertise(forServiceType serviceType: String, name: String?, parameters: () -> NWParameters) -> AsyncThrowingStream<NWConnection, Error> {
+	private static func advertise(forServiceType serviceType: String, name: String?, txtRecord: NWTXTRecord?, parameters: () -> NWParameters) -> AsyncThrowingStream<NWConnection, Error> {
 		AsyncThrowingStream { continuation in
 			let listener: NWListener
 			do {
@@ -92,7 +92,7 @@ public struct Connection {
 				continuation.finish(throwing: error)
 				return
 			}
-			listener.service = .init(name: name, type: serviceType)
+			listener.service = .init(name: name, type: serviceType, txtRecord: txtRecord ?? NWTXTRecord())
 			listener.stateUpdateHandler = { state in
 				switch state {
 					case .failed(let error):

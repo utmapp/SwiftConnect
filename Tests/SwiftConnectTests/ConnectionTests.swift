@@ -27,7 +27,7 @@ final class SwiftConnectTests: XCTestCase {
 			connection.close()
 		}
 		let client = Task {
-			let connection = try await Connection(endpoint: Connection.endpoints(forServiceType: Self.serviceType).first { !$0.isEmpty }!.first!, key: Self.key)
+			let connection = try await Connection(endpoint: Connection.browse(forServiceType: Self.serviceType).first { !$0.isEmpty }!.first!.endpoint, key: Self.key)
 			try await Self.verify(sending: Self.clientData, receiving: Self.serverData, on: connection)
 			connection.close()
 		}
@@ -61,7 +61,7 @@ final class SwiftConnectTests: XCTestCase {
 			return chain.first!
 		}
 		let client = Task {
-			let connection = try await Connection(endpoint: Connection.endpoints(forServiceType: Self.serviceType).first { !$0.isEmpty }!.first!, identity: clientIdentity)
+			let connection = try await Connection(endpoint: Connection.browse(forServiceType: Self.serviceType).first { !$0.isEmpty }!.first!.endpoint, identity: clientIdentity)
 			try await Self.verify(sending: Self.clientData, receiving: Self.serverData, on: connection)
 			let chain = connection.peerCertificateChain
 			XCTAssert(chain.count == 1)

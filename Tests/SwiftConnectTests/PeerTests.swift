@@ -55,7 +55,7 @@ final class PeerTests: XCTestCase {
 			serverConnection.close()
 		}
 		let client = Task {
-			let clientConnection = try await Connection(endpoint: Connection.endpoints(forServiceType: Self.serviceType).first { !$0.isEmpty }!.first!, key: Self.key)
+			let clientConnection = try await Connection(endpoint: Connection.browse(forServiceType: Self.serviceType).first { !$0.isEmpty }!.first!.endpoint, key: Self.key)
 			let client = Peer(connection: clientConnection, localInterface: TestLocalInterface())
 			_ = try await TestMessage.Handshake.send(.init(), to: client)
 			clientConnection.close()
@@ -77,7 +77,7 @@ final class PeerTests: XCTestCase {
 			serverConnection.close()
 		}
 		let client = Task {
-			let clientConnection = try await Connection(endpoint: Connection.endpoints(forServiceType: Self.serviceType).first { !$0.isEmpty }!.first!, key: Self.key)
+			let clientConnection = try await Connection(endpoint: Connection.browse(forServiceType: Self.serviceType).first { !$0.isEmpty }!.first!.endpoint, key: Self.key)
 			let client = Peer(connection: clientConnection, localInterface: TestLocalInterface())
 			do {
 				_ = try await TestMessage.Fail.send(.init(), to: client)
