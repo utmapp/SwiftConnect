@@ -60,34 +60,38 @@ public struct Connection {
 	
 	/// Start a new service over Bonjour using TLS with a shared key.
 	/// - Parameters:
+	///   - port: Optional port to listen on.
 	///   - serviceType: Name of the service to advertise.
 	///   - name: Optional name of the device.
+	///   - txtRecord: Optional TXT records to advertise.
 	///   - key: Pre-shared key to establish TLS-PSK.
 	/// - Returns: List of connected peers (asynchronously).
-	public static func advertise(forServiceType serviceType: String, name: String? = nil, txtRecord: NWTXTRecord? = nil, key: Data) -> AsyncThrowingStream<NWConnection, Error> {
-		advertise(forServiceType: serviceType, name: name, txtRecord: txtRecord) {
+	public static func advertise(on port: NWEndpoint.Port = .any, forServiceType serviceType: String, name: String? = nil, txtRecord: NWTXTRecord? = nil, key: Data) -> AsyncThrowingStream<NWConnection, Error> {
+		advertise(on: port, forServiceType: serviceType, name: name, txtRecord: txtRecord) {
 			NWParameters(authenticatingWithKey: key)
 		}
 	}
 
 	/// Start a new service over Bonjour using TLS with a server identity.
 	/// - Parameters:
+	///   - port: Optional port to listen on.
 	///   - serviceType: Name of the service to advertise.
 	///   - name: Optional name of the device.
+	///   - txtRecord: Optional TXT records to advertise.
 	///   - identity: Contains the certificate and private key of the server.
 	///   - validation: Optional validation callback on connecting clients.
 	/// - Returns: List of connected peers (asynchronously).
-	public static func advertise(forServiceType serviceType: String, name: String? = nil, txtRecord: NWTXTRecord? = nil, identity: SecIdentity, validation: @escaping ValidationCallback = { _ in true }) -> AsyncThrowingStream<NWConnection, Error> {
-		advertise(forServiceType: serviceType, name: name, txtRecord: txtRecord) {
+	public static func advertise(on port: NWEndpoint.Port = .any, forServiceType serviceType: String, name: String? = nil, txtRecord: NWTXTRecord? = nil, identity: SecIdentity, validation: @escaping ValidationCallback = { _ in true }) -> AsyncThrowingStream<NWConnection, Error> {
+		advertise(on: port, forServiceType: serviceType, name: name, txtRecord: txtRecord) {
 			NWParameters(authenticatingWithIdentity: identity, isServer: true, validation: validation)
 		}
 	}
 
-	private static func advertise(forServiceType serviceType: String, name: String?, txtRecord: NWTXTRecord?, parameters: () -> NWParameters) -> AsyncThrowingStream<NWConnection, Error> {
+	private static func advertise(on port: NWEndpoint.Port, forServiceType serviceType: String, name: String?, txtRecord: NWTXTRecord?, parameters: () -> NWParameters) -> AsyncThrowingStream<NWConnection, Error> {
 		AsyncThrowingStream { continuation in
 			let listener: NWListener
 			do {
-				listener = try NWListener(using: parameters())
+				listener = try NWListener(using: parameters(), on: port)
 			} catch {
 				continuation.finish(throwing: error)
 				return
