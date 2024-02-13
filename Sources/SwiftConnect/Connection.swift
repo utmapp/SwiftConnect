@@ -155,29 +155,35 @@ public struct Connection {
 	}
 
 	private func connect() async throws {
-		try await withCheckedThrowingContinuation { continuation in
-			connection.stateUpdateHandler = { [weak connection] state in
-				switch state {
-					case .ready:
-						connection?.stateUpdateHandler = { state in
-							switch state {
-								case .failed(let error):
-									dataContinuation.finish(throwing: error)
-								case .cancelled:
-									dataContinuation.finish()
-								default:
-									break
+		try await withTaskCancellationHandler {
+			try await withCheckedThrowingContinuation { continuation in
+				connection.stateUpdateHandler = { [weak connection] state in
+					switch state {
+						case .ready:
+							connection?.stateUpdateHandler = { state in
+								switch state {
+									case .failed(let error):
+										dataContinuation.finish(throwing: error)
+									case .cancelled:
+										dataContinuation.finish()
+									default:
+										break
+								}
 							}
-						}
-						continuation.resume()
+							continuation.resume()
 
-					case .failed(let error):
-						continuation.resume(throwing: error)
-					default:
-						break
+						case .failed(let error):
+							continuation.resume(throwing: error)
+						case .cancelled:
+							continuation.resume(throwing: CancellationError())
+						default:
+							break
+					}
 				}
+				connection.start(queue: .main)
 			}
-			connection.start(queue: .main)
+		} onCancel: {
+			connection.cancel()
 		}
 		Self.recieveNextMessage(connection: connection, continuation: dataContinuation)
 	}
