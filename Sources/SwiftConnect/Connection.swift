@@ -27,10 +27,13 @@ public struct Connection {
 		return metadata.securityProtocolMetadata.peerCertificateChain
 	}
 
+	/// Dispatch queue for connection callbacks.
+	private let connectionQueue: DispatchQueue
+
 	/// Finds local peers advertising a service over Bonjour with optional metadata.
 	/// - Parameter serviceType: Name of the service to look for.
 	/// - Returns: Set of browse results (asynchronously).
-	public static func browse(forServiceType serviceType: String) -> AsyncThrowingStream<Set<NWBrowser.Result>, Error> {
+	public static func browse(forServiceType serviceType: String, connectionQueue: DispatchQueue = .main) -> AsyncThrowingStream<Set<NWBrowser.Result>, Error> {
 		AsyncThrowingStream { continuation in
 			let parameters = NWParameters()
 			parameters.includePeerToPeer = true
@@ -54,7 +57,7 @@ public struct Connection {
 			continuation.onTermination = { @Sendable _ in
 				browser.cancel()
 			}
-			browser.start(queue: .main)
+			browser.start(queue: connectionQueue)
 		}
 	}
 	
@@ -66,8 +69,8 @@ public struct Connection {
 	///   - txtRecord: Optional TXT records to advertise.
 	///   - key: Pre-shared key to establish TLS-PSK.
 	/// - Returns: List of connected peers (asynchronously).
-	public static func advertise(on port: NWEndpoint.Port = .any, forServiceType serviceType: String, name: String? = nil, txtRecord: NWTXTRecord? = nil, key: Data) -> AsyncThrowingStream<NWConnection, Error> {
-		advertise(on: port, forServiceType: serviceType, name: name, txtRecord: txtRecord) {
+	public static func advertise(on port: NWEndpoint.Port = .any, forServiceType serviceType: String, name: String? = nil, txtRecord: NWTXTRecord? = nil, connectionQueue: DispatchQueue = .main, key: Data) -> AsyncThrowingStream<NWConnection, Error> {
+		advertise(on: port, forServiceType: serviceType, name: name, txtRecord: txtRecord, connectionQueue: connectionQueue) {
 			NWParameters(authenticatingWithKey: key)
 		}
 	}
@@ -78,16 +81,17 @@ public struct Connection {
 	///   - serviceType: Name of the service to advertise.
 	///   - name: Optional name of the device.
 	///   - txtRecord: Optional TXT records to advertise.
+	///   - connectionQueue: Dispatch queue for connection callbacks.
 	///   - identity: Contains the certificate and private key of the server.
 	///   - validation: Optional validation callback on connecting clients.
 	/// - Returns: List of connected peers (asynchronously).
-	public static func advertise(on port: NWEndpoint.Port = .any, forServiceType serviceType: String, name: String? = nil, txtRecord: NWTXTRecord? = nil, identity: SecIdentity, validation: @escaping ValidationCallback = { _ in true }) -> AsyncThrowingStream<NWConnection, Error> {
-		advertise(on: port, forServiceType: serviceType, name: name, txtRecord: txtRecord) {
-			NWParameters(authenticatingWithIdentity: identity, isServer: true, validation: validation)
+	public static func advertise(on port: NWEndpoint.Port = .any, forServiceType serviceType: String, name: String? = nil, txtRecord: NWTXTRecord? = nil, connectionQueue: DispatchQueue = .main, identity: SecIdentity, validation: @escaping ValidationCallback = { _ in true }) -> AsyncThrowingStream<NWConnection, Error> {
+		advertise(on: port, forServiceType: serviceType, name: name, txtRecord: txtRecord, connectionQueue: connectionQueue) {
+			NWParameters(authenticatingWithIdentity: identity, isServer: true, validationQueue: connectionQueue, validation: validation)
 		}
 	}
 
-	private static func advertise(on port: NWEndpoint.Port, forServiceType serviceType: String, name: String?, txtRecord: NWTXTRecord?, parameters: () -> NWParameters) -> AsyncThrowingStream<NWConnection, Error> {
+	private static func advertise(on port: NWEndpoint.Port, forServiceType serviceType: String, name: String?, txtRecord: NWTXTRecord?, connectionQueue: DispatchQueue, parameters: () -> NWParameters) -> AsyncThrowingStream<NWConnection, Error> {
 		AsyncThrowingStream { continuation in
 			let listener: NWListener
 			do {
@@ -113,16 +117,17 @@ public struct Connection {
 			continuation.onTermination = { @Sendable _ in
 				listener.cancel()
 			}
-			listener.start(queue: .main)
+			listener.start(queue: connectionQueue)
 		}
 	}
 
 	/// Open a new connection to an existing service using TLS with a shared key.
 	/// - Parameters:
 	///   - endpoint: Service to connect to.
+	///   - connectionQueue: Dispatch queue for connection callbacks.
 	///   - key: Pre-shared key to establish TLS-PSK.
-	public init(endpoint: NWEndpoint, key: Data) async throws {
-		try await self.init(endpoint: endpoint) {
+	public init(endpoint: NWEndpoint, connectionQueue: DispatchQueue = .main, key: Data) async throws {
+		try await self.init(endpoint: endpoint, connectionQueue: connectionQueue) {
 			NWParameters(authenticatingWithKey: key)
 		}
 	}
@@ -130,15 +135,17 @@ public struct Connection {
 	/// Open a new connection to an existing service using TLS with a client identity.
 	/// - Parameters:
 	///   - endpoint: Service to connect to.
+	///   - connectionQueue: Dispatch queue for connection callbacks.
 	///   - identity: Contains the certificate and private key of the client.
 	///   - validation: Optional validation callback on the server identity.
-	public init(endpoint: NWEndpoint, identity: SecIdentity, validation: @escaping ValidationCallback = { _ in true }) async throws {
-		try await self.init(endpoint: endpoint) {
-			NWParameters(authenticatingWithIdentity: identity, isServer: false, validation: validation)
+	public init(endpoint: NWEndpoint, connectionQueue: DispatchQueue = .main, identity: SecIdentity, validation: @escaping ValidationCallback = { _ in true }) async throws {
+		try await self.init(endpoint: endpoint, connectionQueue: connectionQueue) {
+			NWParameters(authenticatingWithIdentity: identity, isServer: false, validationQueue: connectionQueue, validation: validation)
 		}
 	}
 
-	private init(endpoint: NWEndpoint, parameters: () -> NWParameters) async throws {
+	private init(endpoint: NWEndpoint, connectionQueue: DispatchQueue, parameters: () -> NWParameters) async throws {
+		self.connectionQueue = connectionQueue
 		self.connection = NWConnection(to: endpoint, using: parameters())
 		isListening = false
 		(data, dataContinuation) = AsyncThrowingStream.makeStream()
@@ -147,7 +154,9 @@ public struct Connection {
 
 	/// Accept a new connecting client.
 	/// - Parameter connection: Connection from a client.
-	public init(connection: NWConnection) async throws {
+	/// - Parameter connectionQueue: Dispatch queue for connection callbacks.
+	public init(connection: NWConnection, connectionQueue: DispatchQueue = .main) async throws {
+		self.connectionQueue = connectionQueue
 		self.connection = connection
 		isListening = true
 		(data, dataContinuation) = AsyncThrowingStream.makeStream()
@@ -180,7 +189,7 @@ public struct Connection {
 							break
 					}
 				}
-				connection.start(queue: .main)
+				connection.start(queue: connectionQueue)
 			}
 		} onCancel: {
 			connection.cancel()
@@ -241,20 +250,20 @@ extension NWParameters {
 		includePeerToPeer = true
 	}
 
-	convenience init(authenticatingWithIdentity identity: SecIdentity, isServer: Bool, validation: @escaping Connection.ValidationCallback) {
+	convenience init(authenticatingWithIdentity identity: SecIdentity, isServer: Bool, validationQueue: DispatchQueue, validation: @escaping Connection.ValidationCallback) {
 		let tlsOptions = NWProtocolTLS.Options()
 		sec_protocol_options_set_min_tls_protocol_version(tlsOptions.securityProtocolOptions, .TLSv12)
 		if isServer {
 			sec_protocol_options_set_peer_authentication_required(tlsOptions.securityProtocolOptions, true)
 			sec_protocol_options_set_challenge_block(tlsOptions.securityProtocolOptions, { _, completion in
 				completion(sec_identity_create(identity)!)
-			}, .main)
+			}, validationQueue)
 		} else {
 			sec_protocol_options_set_local_identity(tlsOptions.securityProtocolOptions, sec_identity_create(identity)!)
 		}
 		sec_protocol_options_set_verify_block(tlsOptions.securityProtocolOptions, { metadata, _, completion in
 			completion(validation(metadata.peerCertificateChain))
-		}, .main)
+		}, validationQueue)
 
 		self.init(tls: tlsOptions)
 		defaultProtocolStack.applicationProtocols.insert(NWProtocolFramer.Options(definition: .init(implementation: SwiftConnectProtocol.self)), at: 0)
