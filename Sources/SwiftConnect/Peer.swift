@@ -15,6 +15,7 @@ public struct Peer<LocalID: MessageID> {
 	private actor Replies {
 		var token: Int = 1
 		var continuations = [Int: CheckedContinuation<Data, Error>]()
+		var isBusy: Bool = false
 
 		func enqueue(_ continuation: CheckedContinuation<Data, Error>) -> Int {
 			defer {
@@ -68,7 +69,7 @@ public struct Peer<LocalID: MessageID> {
 		Task {
 			do {
 				for try await data in connection.data {
-					Task {
+					await Task {
 						do {
 							var data = data
 							guard let id = data.popFirst(), let _flags = data.popFirst() else {
@@ -104,7 +105,7 @@ public struct Peer<LocalID: MessageID> {
 						} catch {
 							localInterface.handle(error: error)
 						}
-					}
+					}.value
 				}
 			} catch {
 				await replies.failAll(with: error)
@@ -113,7 +114,7 @@ public struct Peer<LocalID: MessageID> {
 	}
 
 	internal func sendWithReply(message: any MessageID, data: Data) async throws -> Data {
-		try await withCheckedThrowingContinuation { continuation in
+		return try await withCheckedThrowingContinuation { continuation in
 			Task {
 				let token = await replies.enqueue(continuation)
 				await withTaskCancellationHandler {
