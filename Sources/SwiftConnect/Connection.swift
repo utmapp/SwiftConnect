@@ -182,8 +182,10 @@ public struct Connection {
 							continuation.resume()
 
 						case .failed(let error):
+							connection?.stateUpdateHandler = nil
 							continuation.resume(throwing: error)
 						case .cancelled:
+							connection?.stateUpdateHandler = nil
 							continuation.resume(throwing: CancellationError())
 						default:
 							break
