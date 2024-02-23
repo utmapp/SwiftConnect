@@ -7,6 +7,9 @@ public struct Connection {
 	/// Callback function for custom certificate chain validation.
 	public typealias ValidationCallback = ([SecCertificate]) -> Bool
 
+	/// Callback function for connection errors.
+	public typealias ErrorCallback = ((Self, any Error) -> Void)
+
 	/// Underlying Network.framework connection.
 	public let connection: NWConnection
 
@@ -14,7 +17,10 @@ public struct Connection {
 	public let isListening: Bool
 
 	/// Iterate over this property to read data from the connection.
-	public let data: AsyncThrowingStream<Data, Error>
+	public private(set) var data: AsyncThrowingStream<Data, Error>
+
+	/// Optional error handler that is invoked when there is a connection error.
+	private let errorHandler: ErrorCallback?
 
 	/// Internal continuation context for `data`.
 	private let dataContinuation: AsyncThrowingStream<Data, Error>.Continuation
@@ -126,8 +132,9 @@ public struct Connection {
 	///   - endpoint: Service to connect to.
 	///   - connectionQueue: Dispatch queue for connection callbacks.
 	///   - key: Pre-shared key to establish TLS-PSK.
-	public init(endpoint: NWEndpoint, connectionQueue: DispatchQueue = .main, key: Data) async throws {
-		try await self.init(endpoint: endpoint, connectionQueue: connectionQueue) {
+	///   - errorHandler: Optional error handler that is invoked when there is a connection error.
+	public init(endpoint: NWEndpoint, connectionQueue: DispatchQueue = .main, key: Data, errorHandler: ErrorCallback? = nil) async throws {
+		try await self.init(endpoint: endpoint, connectionQueue: connectionQueue, errorHandler: errorHandler) {
 			NWParameters(authenticatingWithKey: key)
 		}
 	}
@@ -137,16 +144,18 @@ public struct Connection {
 	///   - endpoint: Service to connect to.
 	///   - connectionQueue: Dispatch queue for connection callbacks.
 	///   - identity: Contains the certificate and private key of the client.
+	///   - errorHandler: Optional error handler that is invoked when there is a connection error.
 	///   - validation: Optional validation callback on the server identity.
-	public init(endpoint: NWEndpoint, connectionQueue: DispatchQueue = .main, identity: SecIdentity, validation: @escaping ValidationCallback = { _ in true }) async throws {
-		try await self.init(endpoint: endpoint, connectionQueue: connectionQueue) {
+	public init(endpoint: NWEndpoint, connectionQueue: DispatchQueue = .main, identity: SecIdentity, errorHandler: ErrorCallback? = nil, validation: @escaping ValidationCallback = { _ in true }) async throws {
+		try await self.init(endpoint: endpoint, connectionQueue: connectionQueue, errorHandler: errorHandler) {
 			NWParameters(authenticatingWithIdentity: identity, isServer: false, validationQueue: connectionQueue, validation: validation)
 		}
 	}
 
-	private init(endpoint: NWEndpoint, connectionQueue: DispatchQueue, parameters: () -> NWParameters) async throws {
+	private init(endpoint: NWEndpoint, connectionQueue: DispatchQueue, errorHandler: ErrorCallback?, parameters: () -> NWParameters) async throws {
 		self.connectionQueue = connectionQueue
 		self.connection = NWConnection(to: endpoint, using: parameters())
+		self.errorHandler = errorHandler
 		isListening = false
 		(data, dataContinuation) = AsyncThrowingStream.makeStream()
 		try await connect()
@@ -155,9 +164,11 @@ public struct Connection {
 	/// Accept a new connecting client.
 	/// - Parameter connection: Connection from a client.
 	/// - Parameter connectionQueue: Dispatch queue for connection callbacks.
-	public init(connection: NWConnection, connectionQueue: DispatchQueue = .main) async throws {
+	/// - Parameter errorHandler: Optional error handler that is invoked when there is a connection error.
+	public init(connection: NWConnection, connectionQueue: DispatchQueue = .main, errorHandler: ErrorCallback? = nil) async throws {
 		self.connectionQueue = connectionQueue
 		self.connection = connection
+		self.errorHandler = errorHandler
 		isListening = true
 		(data, dataContinuation) = AsyncThrowingStream.makeStream()
 		try await connect()
@@ -173,6 +184,7 @@ public struct Connection {
 								switch state {
 									case .failed(let error):
 										dataContinuation.finish(throwing: error)
+										errorHandler?(self, error)
 									case .cancelled:
 										dataContinuation.finish()
 									default:
