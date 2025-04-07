@@ -53,6 +53,10 @@ public struct Connection {
 						continuation.finish(throwing: error)
 					case .cancelled:
 						continuation.finish()
+					case .waiting(let error):
+						if case .dns(let code) = error, code == kDNSServiceErr_PolicyDenied {
+							continuation.finish(throwing: ConnectionError.localNetworkDenied)
+						}
 					default:
 						break
 				}
@@ -113,6 +117,10 @@ public struct Connection {
 						continuation.finish(throwing: error)
 					case .cancelled:
 						continuation.finish()
+					case .waiting(let error):
+						if case .dns(let code) = error, code == kDNSServiceErr_PolicyDenied {
+							continuation.finish(throwing: ConnectionError.localNetworkDenied)
+						}
 					default:
 						break
 				}
@@ -199,6 +207,12 @@ public struct Connection {
 						case .cancelled:
 							connection?.stateUpdateHandler = nil
 							continuation.resume(throwing: CancellationError())
+						case .waiting(_):
+							if #available(macOS 11, iOS 14.2, tvOS 14.2, watchOS 7.1, *), case .localNetworkDenied? = connection?.currentPath?.unsatisfiedReason {
+								connection?.stateUpdateHandler = nil
+								continuation.resume(throwing: ConnectionError.localNetworkDenied)
+							}
+							break
 						default:
 							break
 					}
@@ -292,5 +306,11 @@ extension sec_protocol_metadata_t {
 			certificates.append(sec_certificate_copy_ref(certificate).takeRetainedValue())
 		}
 		return certificates
+	}
+}
+
+public extension Connection {
+	enum ConnectionError: Error {
+		case localNetworkDenied
 	}
 }
